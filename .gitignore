@@ -1,0 +1,14 @@
+# entorno de uv
+.venv/
+
+# python
+__pycache__/
+*.py[cod]
+
+# archivos locales (no van al repo)
+#   .env         credenciales de Spotify
+#   token.json   token de la sesión
+#   config.json  perfiles y ventana; se genera solo al primer arranque
+.env
+token.json
+config.json

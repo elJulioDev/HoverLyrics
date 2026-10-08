@@ -1,0 +1,12 @@
+[project]
+name = "hoverlyrics"
+version = "0.1.0"
+description = "Ventana emergente con la letra de la canción que suena en Spotify"
+requires-python = ">=3.9"
+dependencies = ["pillow>=9.0"]
+
+[tool.uv]
+# En Linux, el Python que uv se descarga trae un Tk sin Xft/fontconfig: solo ve
+# la fuente "fixed" de 7pt y el texto queda diminuto. El Python del sistema sí
+# ve las fuentes reales, así que lo preferimos (si no hay, uv usa el suyo).
+python-preference = "system"
