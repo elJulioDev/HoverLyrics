@@ -28,6 +28,7 @@ MOVE_TOLERANCE_PX = 2      # diferencia que todavía consideramos "no la movió"
 REROLL_POLL_MS = 20        # cada cuánto se mira si terminó el clic en el gif
 REROLL_TIMEOUT_S = 5       # si el hilo del clic se cuelga, no esperar para siempre
 LABEL_SLACK = 8            # aire extra del texto para que no se corte al envolver
+WAITING = ("Spotify", "Esperando a Spotify…")   # ventana por defecto sin letra
 
 def throttle(last_message, last_at, message):
     """Imprime `message` la primera vez y después cada ERROR_REPEAT_S.
@@ -340,7 +341,7 @@ class LyricWindow:
             if snapshot.get("image") is not None:
                 self._show_image(*snapshot["image"])
 
-        want = None
+        want = WAITING
         if snapshot.get("playing"):
             lines = snapshot.get("lines")
             if lines is None:
