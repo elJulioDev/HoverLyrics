@@ -34,11 +34,14 @@ def pick_image(config, avoid=None):
             return random.choice(options)
     return None
 
-@functools.lru_cache(maxsize=8)
+@functools.lru_cache(maxsize=4)
 def _decode(path, size, bg):
     """Decodifica y escala todas las partes. Devuelve (frames PIL, demoras).
     Cacheado: decodificar un gif grande es lo más caro del programa y varias
-    canciones pueden caer en la misma imagen.
+    canciones pueden caer en la misma imagen. Se guardan pocas entradas porque
+    un gif animado puede tener cientos de frames y cada uno ocupa memoria;
+    recortar la caché cuesta CPU (se decodifica de nuevo), no fluidez: la
+    decodificación corre en los hilos de red/clic, nunca en el de la UI.
     """
     if path is None:
         return [Image.new("RGB", (size, size), bg)], [FALLBACK_DELAY]

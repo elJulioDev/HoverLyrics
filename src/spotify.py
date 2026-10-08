@@ -2,8 +2,6 @@
 No se usa el Client Secret: PKCE alcanza para una app de escritorio, así que
 con el Client ID sobra.
 """
-import base64
-import hashlib
 import json
 import os
 import threading
@@ -11,9 +9,11 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from .config import ROOT
+
+# base64, hashlib, webbrowser y http.server solo hacen falta la primera vez,
+# para el login PKCE. Se importan dentro de `Auth._login` para no cargarlos
+# (ni ocupar memoria) en el arranque normal, que solo refresca el token.
 
 TOKEN_FILE = ROOT / "token.json"
 REDIRECT_URI = "http://127.0.0.1:8888/callback"
@@ -82,6 +82,11 @@ class Auth:
 
     def _login(self):
         """Flujo PKCE: navegador + servidor local en 127.0.0.1:8888."""
+        import base64
+        import hashlib
+        import webbrowser
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
         verifier = base64.urlsafe_b64encode(os.urandom(64)).rstrip(b"=").decode()
         challenge = base64.urlsafe_b64encode(
             hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
