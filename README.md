@@ -11,9 +11,6 @@ jpg…) que sale de una carpeta según el **perfil** elegido.
 
 ![La ventana de HoverLyrics: el nombre de la canción en la barra de título, el gif del perfil a la izquierda y una línea de la letra](captura.png)
 
-*(El nombre de la canción va en la barra de título y abajo aparece una línea de
-la letra con el gif del perfil.)*
-
 ## Índice
 
 - [Qué hace](#qué-hace)
@@ -29,8 +26,7 @@ la letra con el gif del perfil.)*
 
 ## Qué hace
 
-- Muestra **una línea de la letra por ventana**, sincronizada con lo que suena
-  (`progress_ms` de Spotify + los timestamps de lrclib).
+- Muestra **una línea de la letra por ventana**, sincronizada con lo que suena.
 - El gif de la izquierda sale de la carpeta del **perfil** activo. Elegís el
   perfil en `config.json` y podés cambiarlo al vuelo con el **clic derecho**.
 - **Clic izquierdo** en el gif → otra imagen al azar del mismo perfil.
@@ -79,6 +75,10 @@ la letra con el gif del perfil.)*
 
 La primera vez el script te pide el Client ID por terminal y lo guarda en
 `.env`, junto al proyecto.
+
+> [!WARNING]
+> El login usa el puerto **8888**, así que tiene que estar libre: si algo lo
+> ocupa, la autorización falla. Liberalo y reintentá.
 
 ## Uso
 
@@ -168,9 +168,8 @@ canción ni del nombre de la carpeta.
 Acepta cualquier formato que abra Pillow: `.gif`, `.webp` (también animados),
 `.png`, `.jpg`, `.jpeg`, `.bmp`, `.tiff`.
 
-- `icono_px` es la **caja** donde entran: cada imagen se escala manteniendo la
-  proporción (sin deformarse) y se centra. Al agrandar usa NEAREST, para que los
-  emojis pixel art no se emborronen; al achicar, LANCZOS.
+- `icono_px` es la **caja** donde entran: cada imagen se escala sin deformarse y
+  se centra.
 - Cada gif se reproduce **a su propio ritmo** (se respeta la duración de cada
   frame, que puede variar entre frames).
 - Se elige **una imagen al azar por canción** y se mantiene hasta que cambie el
@@ -205,34 +204,12 @@ imagen y letra), `texto_margen`, `margen_y`, `fuente` (`[familia, tamaño]`) y
 
 ## Cómo funciona
 
-Hay **dos hilos**, cada uno con una responsabilidad:
+La app tiene dos hilos: uno habla con Spotify y con [lrclib.net](https://lrclib.net),
+y el otro dibuja la ventana. Así una petición lenta nunca traba la animación.
 
-- **Red**: consulta Spotify cada 400 ms y, cuando cambia la canción, baja la
-  letra de [lrclib.net](https://lrclib.net) y decodifica la imagen. Nunca toca la
-  ventana.
-- **UI** (el hilo de Tk): cada **100 ms** calcula qué línea toca y dibuja. Acá
-  corren también la animación y los clics.
-
-El hilo aparte es porque una petición HTTP puede tardar cientos de ms y
-bloquearía la animación. Y como la letra ya trae el tiempo de cada línea, la
-ventana **extrapola la posición** entre consulta y consulta: la red solo
-corrige. Por eso una línea aparece con ≤100 ms de atraso y no hay que esperar a
-la respuesta de Spotify en cada cambio.
-
-> [!NOTE]
-> Si se corta la conexión, la ventana no se cierra (queda la última línea), se
-> reintenta cada 2 s en vez de cada 400 ms y el error se imprime una sola vez
-> cada 30 s. Cuando vuelve, avisa y se resincroniza.
-
-> [!WARNING]
-> El login usa el puerto **8888**. Si está ocupado, la autorización falla:
-> liberalo y reintentá.
-
-> [!NOTE]
-> Spotify dejó de exponer el género del artista (`genres: null`) y los
-> audio-features (`valence`/`energy`: 403 para apps nuevas), así que no hay
-> forma de deducir el estado de ánimo de una canción desde su API. Por eso los
-> perfiles se eligen a mano.
+Como la letra ya viene con el tiempo de cada línea, la ventana calcula qué
+mostrar por su cuenta y solo se corrige con lo que reporta Spotify cada 400 ms.
+Por eso el cambio de línea se siente al instante.
 
 ## Diferencias por sistema
 
@@ -247,10 +224,8 @@ Todo está aislado en `src/system.py`; el resto del código es igual en los tres
 
 > [!NOTE]
 > La detección del tema es *best effort*: si no puede leer la configuración del
-> escritorio, usa el tema claro. El soporte de Windows está implementado con
-> red de seguridad (si algo de Win32 falla, la app sigue andando y solo pierde la
-> funcionalidad de no robar el foco), pero todavía no se probó en una máquina
-> Windows.
+> escritorio, usa el tema claro. El soporte de Windows está implementado pero
+> todavía no se probó en una máquina real.
 
 ## Verificación
 
@@ -258,9 +233,8 @@ Todo está aislado en `src/system.py`; el resto del código es igual en los tres
 uv run main.py --selftest
 ```
 
-Corre los chequeos de la lógica pura —sin red y sin abrir la ventana— del parseo
-de la letra, el timing de las líneas, el encaje de las imágenes, la config, los
-temas, los perfiles y el manejo de errores de red.
+Corre los chequeos internos (parseo de la letra, encaje de las imágenes, config,
+temas y perfiles) sin necesidad de red ni de abrir la ventana.
 
 ## Licencia
 
