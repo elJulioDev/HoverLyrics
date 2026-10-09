@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(hoverlyrics VERSION 0.2.0 LANGUAGES CXX)
+project(hoverlyrics VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,6 +26,7 @@ add_executable(hoverlyrics
     src/images.cpp
     src/spotify.cpp
     src/window.cpp
+    src/setup.cpp
 )
 
 target_link_libraries(hoverlyrics PRIVATE Qt6::Widgets Qt6::Network nlohmann_json::nlohmann_json)

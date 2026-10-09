@@ -2,6 +2,7 @@
 // Uso:  ./hoverlyrics    (--selftest corre los chequeos sin ventana)
 #include <QApplication>
 #include <QCoreApplication>
+#include <QDir>
 #include <iostream>
 #include "config.h"
 #include "images.h"
@@ -9,6 +10,7 @@
 #include "system.h"
 #include "spotify.h"
 #include "window.h"
+#include "setup.h"
 #include "throttle.h"
 
 static int failures = 0;
@@ -84,6 +86,22 @@ static int selftest() {
         CHECK(throttle(last, at, "falla B", 200 + 30001));
     }
 
+    // Credenciales: se guardan en .env y se releen sin duplicar líneas.
+    {
+        const QString dir = QDir::tempPath() + "/hoverlyrics-selftest";
+        QDir(dir).removeRecursively();
+        QDir().mkpath(dir);
+        qputenv("HOVERLYRICS_HOME", dir.toUtf8());
+        qunsetenv("SPOTIFY_CLIENT_ID");
+        CHECK(config::loadClientId().isEmpty());
+        config::saveClientId("abc123");
+        CHECK(config::loadClientId() == "abc123");
+        config::saveClientId("def456");            // pisa, no agrega otra línea
+        CHECK(config::loadClientId() == "def456");
+        QDir(dir).removeRecursively();
+        qunsetenv("HOVERLYRICS_HOME");
+    }
+
     if (failures == 0) {
         std::cout << "selftest ok\n";
         return 0;
@@ -121,10 +139,14 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     config::Config cfg = config::load();
     const config::Palette palette = config::colors(cfg);
-    const QString clientId = config::loadClientId();
+    QString clientId = config::loadClientId();
     if (clientId.isEmpty()) {
-        std::cerr << "Sin Client ID no hay nada que hacer.\n";
-        return 1;
+        // Primer arranque: tutorial + pegar el Client ID en una ventana.
+        clientId = setup::clientIdDialog();
+        if (clientId.isEmpty()) {
+            std::cerr << "Sin Client ID no hay nada que hacer.\n";
+            return 1;
+        }
     }
 
     std::cout << "· perfil '" << cfg.perfil.toStdString() << "' | tema '"

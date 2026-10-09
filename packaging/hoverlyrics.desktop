@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=HoverLyrics
+Comment=Letra sincronizada de Spotify en una ventana flotante
+Exec=hoverlyrics
+Icon=hoverlyrics
+Categories=Audio;Music;AudioVideo;
+Terminal=false

@@ -88,8 +88,9 @@ Queda el binario en `build/hoverlyrics` (`build/hoverlyrics.exe` en Windows).
 > El **Client Secret no se usa**: el login es OAuth PKCE, que para una app de
 > escritorio funciona solo con el Client ID. No lo pegues en ningún lado.
 
-La primera vez el programa te pide el Client ID por terminal y lo guarda en
-`.env`, junto al proyecto.
+La primera vez que abras el programa aparece una **ventana con el tutorial paso a
+paso y un campo para pegar el Client ID**; queda guardado en `.env`, junto al
+ejecutable.
 
 > [!WARNING]
 > El login usa el puerto **8888**, así que tiene que estar libre: si algo lo
@@ -97,15 +98,14 @@ La primera vez el programa te pide el Client ID por terminal y lo guarda en
 
 ## Uso
 
-Corré el binario **desde la carpeta del proyecto** (ahí busca `config.json`,
-`.env`, `token.json` y `gifs/`):
+Descargá el release de tu sistema y ejecutalo. La app es **portable**: guarda
+`config.json`, `.env`, `token.json` y busca `gifs/` en la **misma carpeta que el
+ejecutable** (en un AppImage, junto al archivo `.AppImage`). Si esa carpeta es de
+solo lectura, cae a la carpeta de configuración del usuario
+(`~/.config/hoverlyrics`).
 
-```bash
-./build/hoverlyrics
-```
-
-La primera vez abre el navegador para que autorices la app. Después, con Spotify
-reproduciendo algo:
+La primera vez, si todavía no hay Client ID, se abre una ventana con el tutorial
+y un campo para pegarlo. Después, con Spotify reproduciendo algo:
 
 | Acción | Qué hace |
 |---|---|
@@ -113,11 +113,6 @@ reproduciendo algo:
 | **Clic izquierdo** en el gif | otra imagen al azar del perfil activo |
 | **Clic derecho** en el gif | pasa al siguiente perfil y lo guarda |
 | **X** de la ventana, o `Ctrl+C` | cierra el programa |
-
-> [!TIP]
-> Para que no tengas que ir a la carpeta, `cd` ahí una vez y creá un alias, o
-> compilá con `-DCMAKE_RUNTIME_OUTPUT_DIRECTORY` apuntando donde lo quieras
-> correr.
 
 ## Estructura
 
@@ -133,11 +128,13 @@ src/
   lyrics.cpp     letra sincronizada (lrclib.net)
   images.cpp     elegir las imágenes de los perfiles
   window.cpp     la ventana de Qt
+  setup.cpp      ventana de primer arranque (tutorial del Client ID)
 
 gifs/            una carpeta por perfil
 ```
 
-Al primer arranque se crean tres archivos más, en la carpeta del proyecto:
+Al primer arranque se crean tres archivos más, en la carpeta de datos (junto al
+ejecutable):
 
 | archivo | qué guarda |
 |---|---|

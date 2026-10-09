@@ -37,7 +37,10 @@ struct Palette {
     QString texto;
 };
 
-// La carpeta del proyecto: donde vive config.json/.env/token.json y gifs/.
+// La carpeta de datos: donde viven config.json/.env/token.json y gifs/.
+// Es portable: por defecto va junto al ejecutable (o al .AppImage); la variable
+// HOVERLYRICS_HOME la pisa, y si el destino es de solo lectura cae a la carpeta
+// de configuración del usuario.
 QString root();
 QString configPath();
 QString envPath();
@@ -52,5 +55,6 @@ void setPerfil(Config& cfg, const QString& name);
 
 Palette colors(const Config& cfg);
 QString loadClientId();
+void saveClientId(const QString& id);
 
 }

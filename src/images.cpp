@@ -1,6 +1,7 @@
 #include "images.h"
 #include <QDir>
 #include <QFileInfo>
+#include <QCoreApplication>
 #include <QRandomGenerator>
 
 namespace images {
@@ -11,16 +12,21 @@ const QStringList IMAGE_EXTS = {
 
 QStringList folderImages(const QString& folder) {
     if (folder.isEmpty()) return {};
-    const QDir dir(config::root() + "/" + folder);
-    if (!dir.exists()) return {};
-    QStringList out;
-    const QFileInfoList entries = dir.entryInfoList(QDir::Files, QDir::Name);
-    for (const QFileInfo& info : entries) {
-        if (IMAGE_EXTS.contains("." + info.suffix().toLower())) {
-            out << info.absoluteFilePath();
+    // Los gifs pueden vivir con los datos (portable) o ir empaquetados junto al
+    // ejecutable (AppImage), así que se prueban las dos carpetas.
+    for (const QString& base : {config::root(), QCoreApplication::applicationDirPath()}) {
+        const QDir dir(base + "/" + folder);
+        if (!dir.exists()) continue;
+        QStringList out;
+        const QFileInfoList entries = dir.entryInfoList(QDir::Files, QDir::Name);
+        for (const QFileInfo& info : entries) {
+            if (IMAGE_EXTS.contains("." + info.suffix().toLower())) {
+                out << info.absoluteFilePath();
+            }
         }
+        if (!out.isEmpty()) return out;
     }
-    return out;
+    return {};
 }
 
 QString pick(const config::Config& cfg, const QString& avoid) {

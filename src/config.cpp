@@ -2,7 +2,10 @@
 #include "system.h"
 #include <QFile>
 #include <QDir>
+#include <QFileInfo>
 #include <QByteArray>
+#include <QCoreApplication>
+#include <QStandardPaths>
 #include <iostream>
 
 using ojson = nlohmann::ordered_json;
@@ -31,7 +34,36 @@ static bool b(const ojson_ref o, const char* key, bool fallback) {
     return fallback;
 }
 
-QString root() { return QDir::currentPath(); }
+QString root() {
+    const QString override = qEnvironmentVariable("HOVERLYRICS_HOME");
+    if (!override.isEmpty()) return override;
+
+    // AppImage: el ejecutable vive en un squashfs de solo lectura, así que los
+    // datos van al lado del .AppImage cuando se puede escribir.
+    const QString appImage = qEnvironmentVariable("APPIMAGE");
+    if (!appImage.isEmpty()) {
+        const QString dir = QFileInfo(appImage).absolutePath();
+        if (QFileInfo(dir).isWritable()) return dir;
+    }
+
+    // ¿Esta carpeta tiene pinta de ser la de datos? (portable, o el repo en dev)
+    auto looksLikeHome = [](const QString& dir) {
+        return QFileInfo::exists(dir + "/config.json")
+            || QFileInfo::exists(dir + "/.env")
+            || QFileInfo::exists(dir + "/gifs");
+    };
+
+    const QString appDir = QCoreApplication::applicationDirPath();
+    if (QFileInfo(appDir).isWritable() && looksLikeHome(appDir)) return appDir;
+    const QString cwd = QDir::currentPath();
+    if (looksLikeHome(cwd)) return cwd;
+    if (QFileInfo(appDir).isWritable()) return appDir;
+
+    // Instalada en un sitio de solo lectura: carpeta de configuración del usuario.
+    const QString data = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    QDir().mkpath(data);
+    return data;
+}
 QString configPath() { return root() + "/config.json"; }
 QString envPath() { return root() + "/.env"; }
 QString tokenPath() { return root() + "/token.json"; }
@@ -201,19 +233,27 @@ QString loadClientId() {
             if (!value.isEmpty()) return value;
         }
     }
-    const QString fromEnv = qEnvironmentVariable(key.toUtf8()).trimmed();
-    if (!fromEnv.isEmpty()) return fromEnv;
+    return qEnvironmentVariable(key.toUtf8()).trimmed();
+}
 
-    std::cout << "Necesito el Client ID de tu app de Spotify (developer.spotify.com).\n";
-    std::cout << key.toStdString() << ": " << std::flush;
-    std::string input;
-    std::getline(std::cin, input);
-    const QString value = QString::fromStdString(input).trimmed();
+// Guarda el Client ID en .env, pisando el que hubiera (sin duplicar líneas).
+void saveClientId(const QString& id) {
+    const QString key = "SPOTIFY_CLIENT_ID";
+    QStringList kept;
+    QFile env(envPath());
+    if (env.exists()) {
+        (void)env.open(QIODevice::ReadOnly);
+        for (const QString& raw : QString::fromUtf8(env.readAll()).split('\n')) {
+            const QString line = raw.trimmed();
+            if (line.isEmpty() || line.startsWith(key + "=")) continue;
+            kept << line;
+        }
+        env.close();
+    }
+    kept << key + "=" + id;
     QFile out(envPath());
-    (void)out.open(QIODevice::Append);
-    if (!text.isEmpty() && !text.endsWith('\n')) out.write("\n");
-    out.write((key + "=" + value + "\n").toUtf8());
-    return value;
+    (void)out.open(QIODevice::WriteOnly | QIODevice::Truncate);
+    out.write((kept.join('\n') + "\n").toUtf8());
 }
 
 }
