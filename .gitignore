@@ -1,7 +1,8 @@
-# entorno de uv
-.venv/
+# build
+build/
+build-*/
 
-# python
+# python (por si queda algún rastro en la rama)
 __pycache__/
 *.py[cod]
 

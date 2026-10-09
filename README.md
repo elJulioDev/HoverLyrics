@@ -1,7 +1,8 @@
 # HoverLyrics
 
 ![licencia](https://img.shields.io/badge/licencia-MIT-blue)
-![python](https://img.shields.io/badge/python-3.9%2B-blue)
+![c++](https://img.shields.io/badge/c%2B%2B-17-blue)
+![qt](https://img.shields.io/badge/Qt-6.5%2B-green)
 ![plataformas](https://img.shields.io/badge/plataforma-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey)
 
 Ventana emergente que muestra la **letra de la canción que está sonando en
@@ -15,6 +16,7 @@ jpg…) que sale de una carpeta según el **perfil** elegido.
 
 - [Qué hace](#qué-hace)
 - [Requisitos](#requisitos)
+- [Compilar](#compilar)
 - [Crear la app de Spotify](#crear-la-app-de-spotify)
 - [Uso](#uso)
 - [Estructura](#estructura)
@@ -36,25 +38,38 @@ jpg…) que sale de una carpeta según el **perfil** elegido.
 
 ## Requisitos
 
-- **Python 3.9+** con `tkinter`.
-- Una app de Spotify (gratis, ver abajo).
-- [uv](https://docs.astral.sh/uv/) para las dependencias (`Pillow`). Si no lo
-  tenés, con `pip install pillow` también anda.
+- Un compilador con **C++17** y **CMake 3.21+**.
+- **Qt 6.5 o superior** (módulos `Widgets` y `Network`).
+
+Es la única dependencia externa: con Qt alcanza para las ventanas, los gifs y
+webp animados, el HTTP, el JSON, el hash SHA-256 del login y el servidor local
+del callback. No hace falta instalar nada más.
+
+<details>
+<summary>Cómo instalar Qt 6</summary>
+
+- **Debian/Ubuntu**: `sudo apt install qt6-base-dev`
+- **Fedora**: `sudo dnf install qt6-qtbase-devel`
+- **Arch**: `sudo pacman -S qt6-base`
+- **macOS**: `brew install qt`
+- **Windows**: el instalador de [qt.io](https://www.qt.io/download-qt-installer)
+  (marcá *Qt 6.x → MSVC 64-bit*) o `vcpkg install qtbase`.
+
+</details>
 
 > [!NOTE]
-> El login con Spotify está hecho con la librería estándar (OAuth PKCE), así que
-> la única dependencia es Pillow, que la instala `uv` sola.
+> `nlohmann/json` se descarga solo con CMake en la primera configuración (para
+> guardar `config.json` respetando el orden de los perfiles). No hay que hacer
+> nada a mano.
 
-> [!WARNING]
-> En Linux, el Python que `uv` se descarga trae un Tk sin Xft: solo ve la fuente
-> `fixed` y **el texto sale diminuto**. Por eso el proyecto usa tu Python del
-> sistema, que sí ve las fuentes. Si igual te pasa, corré `python3 main.py`: el
-> script avisa por terminal cuando lo detecta.
+## Compilar
 
-> [!WARNING]
-> En Linux, `tkinter` no viene con Python: hay que instalarlo aparte
-> (`sudo apt install python3-tk`, o el equivalente de tu distro). En Windows y
-> macOS viene con el instalador oficial de Python.
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
+
+Queda el binario en `build/hoverlyrics` (`build/hoverlyrics.exe` en Windows).
 
 ## Crear la app de Spotify
 
@@ -73,7 +88,7 @@ jpg…) que sale de una carpeta según el **perfil** elegido.
 > El **Client Secret no se usa**: el login es OAuth PKCE, que para una app de
 > escritorio funciona solo con el Client ID. No lo pegues en ningún lado.
 
-La primera vez el script te pide el Client ID por terminal y lo guarda en
+La primera vez el programa te pide el Client ID por terminal y lo guarda en
 `.env`, junto al proyecto.
 
 > [!WARNING]
@@ -82,38 +97,42 @@ La primera vez el script te pide el Client ID por terminal y lo guarda en
 
 ## Uso
 
+Corré el binario **desde la carpeta del proyecto** (ahí busca `config.json`,
+`.env`, `token.json` y `gifs/`):
+
 ```bash
-uv run main.py
+./build/hoverlyrics
 ```
 
-La primera vez `uv` crea el entorno, instala Pillow y abre el navegador para que
-autorices la app. Después, con Spotify reproduciendo algo:
+La primera vez abre el navegador para que autorices la app. Después, con Spotify
+reproduciendo algo:
 
 | Acción | Qué hace |
 |---|---|
 | **Arrastrar** la ventana | la mueve; la posición se recuerda |
 | **Clic izquierdo** en el gif | otra imagen al azar del perfil activo |
 | **Clic derecho** en el gif | pasa al siguiente perfil y lo guarda |
-| **X** de la ventana, o `Ctrl+C` | cierra el script |
+| **X** de la ventana, o `Ctrl+C` | cierra el programa |
 
 > [!TIP]
-> Si ya tenés Pillow instalado y no querés usar `uv`, `python3 main.py` funciona
-> igual.
+> Para que no tengas que ir a la carpeta, `cd` ahí una vez y creá un alias, o
+> compilá con `-DCMAKE_RUNTIME_OUTPUT_DIRECTORY` apuntando donde lo quieras
+> correr.
 
 ## Estructura
 
 ```
-main.py          entrada: --selftest y arranque
-pyproject.toml   dependencia de Pillow (para uv)
+CMakeLists.txt   build: Qt 6 (Widgets + Network) y nlohmann/json
 captura.png      la captura de arriba
 
 src/
-  config.py      .env, config.json, perfiles, temas
-  system.py      diferencias entre Windows, Linux y macOS
-  spotify.py     login OAuth PKCE y estado de reproducción
-  lyrics.py      letra sincronizada (lrclib.net)
-  images.py      elegir y decodificar las imágenes de los perfiles
-  window.py      la ventana de Tk
+  main.cpp       entrada: --selftest y arranque
+  config.cpp     .env, config.json, perfiles, temas
+  system.cpp     diferencias entre Windows, Linux y macOS
+  spotify.cpp    login OAuth PKCE y estado de reproducción
+  lyrics.cpp     letra sincronizada (lrclib.net)
+  images.cpp     elegir las imágenes de los perfiles
+  window.cpp     la ventana de Qt
 
 gifs/            una carpeta por perfil
 ```
@@ -165,13 +184,13 @@ Cada perfil es un nombre a elección que apunta a una carpeta. Ponés las
 imágenes donde quieras y elegís el perfil con `"perfil"`; no dependen de la
 canción ni del nombre de la carpeta.
 
-Acepta cualquier formato que abra Pillow: `.gif`, `.webp` (también animados),
-`.png`, `.jpg`, `.jpeg`, `.bmp`, `.tiff`.
+Acepta los formatos que abre Qt: `.gif`, `.webp` (también animados), `.png`,
+`.jpg`, `.jpeg`, `.bmp`, `.tiff`.
 
 - `icono_px` es la **caja** donde entran: cada imagen se escala sin deformarse y
   se centra.
 - Cada gif se reproduce **a su propio ritmo** (se respeta la duración de cada
-  frame, que puede variar entre frames).
+  frame).
 - Se elige **una imagen al azar por canción** y se mantiene hasta que cambie el
   tema. Si el perfil no existe o su carpeta está vacía, cae a `default`.
 
@@ -199,42 +218,46 @@ imagen y letra), `texto_margen`, `margen_y`, `fuente` (`[familia, tamaño]`) y
 `siempre_arriba`.
 
 > [!NOTE]
-> Los cambios se aplican al reiniciar el script. Si traés un `config.json` de
+> Los cambios se aplican al reiniciar el programa. Si traés un `config.json` de
 > otro sistema y la fuente no existe, cae sola a la del sistema.
 
 ## Cómo funciona
 
-La app tiene dos hilos: uno habla con Spotify y con [lrclib.net](https://lrclib.net),
-y el otro dibuja la ventana. Así una petición lenta nunca traba la animación.
+Un solo hilo y dos temporizadores, sobre el bucle de eventos de Qt:
 
-Como la letra ya viene con el tiempo de cada línea, la ventana calcula qué
-mostrar por su cuenta y solo se corrige con lo que reporta Spotify cada 400 ms.
+- cada **400 ms** se le pregunta a Spotify (red, asíncrono: nunca bloquea);
+- cada **100 ms** se recalcula qué línea toca y se dibuja.
+
+Como la letra ya viene con el tiempo de cada línea, la ventana extrapola la
+posición entre consulta y consulta y solo se corrige con lo que reporta Spotify.
 Por eso el cambio de línea se siente al instante.
 
 ## Diferencias por sistema
 
-Todo está aislado en `src/system.py`; el resto del código es igual en los tres.
+Con Qt casi todo es una sola API en las tres plataformas:
 
-| | Linux (X11) | Windows | macOS |
-|---|---|---|---|
-| **No robar foco** | tipo `utility` (EWMH) | estilo `WS_EX_NOACTIVATE` | sin equivalente, no se aplica |
-| **Tema `sistema`** | KDE (`kdeglobals`) o GNOME (`gsettings`) | registro `AppsUseLightTheme` | `AppleInterfaceStyle` |
-| **Fuente por defecto** | DejaVu Sans | Segoe UI | Helvetica Neue |
-| **tkinter** | `python3-tk` del sistema | instalador de Python | instalador de Python |
+| | Cómo se resuelve |
+|---|---|
+| **No robar foco** | `Qt::WindowDoesNotAcceptFocus` |
+| **Tema `sistema`** | `QStyleHints::colorScheme()` |
+| **Fuente por defecto** | Segoe UI (Windows), Helvetica Neue (macOS), DejaVu Sans (Linux) |
+| **Ventana sin entrada en la barra** | `Qt::Tool` |
+
+El gif animado, el webp, el HTTP, el login y el servidor del callback también
+son iguales en los tres.
 
 > [!NOTE]
-> La detección del tema es *best effort*: si no puede leer la configuración del
-> escritorio, usa el tema claro. El soporte de Windows está implementado pero
-> todavía no se probó en una máquina real.
+> El soporte de Windows está implementado pero todavía no se probó en una
+> máquina real.
 
 ## Verificación
 
 ```bash
-uv run main.py --selftest
+./build/hoverlyrics --selftest
 ```
 
-Corre los chequeos internos (parseo de la letra, encaje de las imágenes, config,
-temas y perfiles) sin necesidad de red ni de abrir la ventana.
+Corre los chequeos internos (parseo de la letra, config, temas, perfiles y el
+control de errores repetidos) sin necesidad de red ni de abrir la ventana.
 
 ## Licencia
 
