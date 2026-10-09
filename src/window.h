@@ -1,5 +1,5 @@
 #pragma once
-#include <QWidget>
+#include <QObject>
 #include <QPoint>
 #include <QString>
 #include "config.h"
@@ -9,36 +9,41 @@
 class QLabel;
 class QMovie;
 class QTimer;
+class QWidget;
 
-// La ventana emergente con la letra. Dos timers: uno consulta Spotify (red) y
-// otro recalcula la línea (local, sin red). Como la letra ya trae los tiempos,
-// entre consulta y consulta la posición se extrapola y la red solo corrige.
-class LyricWindow : public QWidget {
+// Controlador: dos timers (uno consulta Spotify, otro recalcula la línea) y la
+// ventana. Como la letra ya trae los tiempos, entre consulta y consulta la
+// posición se extrapola y la red solo corrige.
+//
+// La ventana se destruye y se vuelve a crear con cada línea (el efecto pedido):
+// por eso el controlador no es la ventana, sino un objeto que la arma.
+class LyricWindow : public QObject {
 public:
-    LyricWindow(config::Config cfg, Spotify* spotify, QWidget* parent = nullptr);
+    LyricWindow(config::Config cfg, Spotify* spotify, QObject* parent = nullptr);
     void start();
 
 protected:
-    void moveEvent(QMoveEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
+    struct Popup;
+
     void onPoll();
     void onTick();
     void render(bool visible, const QString& title = QString(), const QString& line = QString());
-    void loadImage(const QString& path);
+    void rebuild(const QString& title, const QString& line);
+    void destroy();
+    void setImage(const QString& path);
     void reroll();
     void nextProfile();
     void throttleError(const QString& message);
-    QPoint centered() const;
+    QPoint centered(QWidget* window) const;
 
     config::Config cfg;
     Spotify* spotify;
     config::Palette palette;
 
-    QLabel* iconLabel = nullptr;
-    QLabel* textLabel = nullptr;
-    QMovie* movie = nullptr;
+    Popup* popup = nullptr;
     QString currentImage;
 
     QTimer* pollTimer = nullptr;

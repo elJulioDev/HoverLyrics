@@ -29,3 +29,9 @@ add_executable(hoverlyrics
 )
 
 target_link_libraries(hoverlyrics PRIVATE Qt6::Widgets Qt6::Network nlohmann_json::nlohmann_json)
+
+# X11: para marcar la ventana como "skip taskbar" en Linux (ver system.cpp).
+if(UNIX AND NOT APPLE)
+    find_package(X11 REQUIRED)
+    target_link_libraries(hoverlyrics PRIVATE X11::X11)
+endif()

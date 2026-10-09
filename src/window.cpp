@@ -2,15 +2,20 @@
 #include "images.h"
 #include "system.h"
 #include "throttle.h"
+#include <QApplication>
+#include <QElapsedTimer>
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QMovie>
 #include <QScreen>
 #include <QTimer>
+#include <QEvent>
 #include <QMoveEvent>
 #include <QMouseEvent>
 #include <QImageReader>
-#include <QElapsedTimer>
+#include <QIcon>
+#include <QPixmap>
+#include <QWidget>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <iostream>
@@ -29,37 +34,22 @@ static qint64 monotonicMs() {
     return s_clock.elapsed();
 }
 
-LyricWindow::LyricWindow(config::Config config, Spotify* spotifyClient, QWidget* parent)
-    : QWidget(parent), cfg(std::move(config)), spotify(spotifyClient) {
+// Icono transparente: saca el logo por defecto de la barra de título.
+static QIcon blankIcon() {
+    static QPixmap pixel = [] { QPixmap p(1, 1); p.fill(Qt::transparent); return p; }();
+    return QIcon(pixel);
+}
+
+struct LyricWindow::Popup {
+    QWidget* widget = nullptr;
+    QLabel* icon = nullptr;
+    QLabel* text = nullptr;
+    QMovie* movie = nullptr;
+};
+
+LyricWindow::LyricWindow(config::Config config, Spotify* spotifyClient, QObject* parent)
+    : QObject(parent), cfg(std::move(config)), spotify(spotifyClient) {
     palette = config::colors(cfg);
-
-    Qt::WindowFlags flags = Qt::Tool | Qt::WindowDoesNotAcceptFocus;
-    if (cfg.ventana.siempreArriba) flags |= Qt::WindowStaysOnTopHint;
-    setWindowFlags(flags);
-    setAttribute(Qt::WA_ShowWithoutActivating);
-    setFixedSize(cfg.ventana.ancho, cfg.ventana.alto);
-    setStyleSheet(QString("QWidget{background:%1;} QLabel{background:transparent;color:%2;}")
-                      .arg(palette.fondo, palette.texto));
-
-    iconLabel = new QLabel(this);
-    iconLabel->setFixedSize(cfg.ventana.iconoPx, cfg.ventana.iconoPx);
-    iconLabel->setAlignment(Qt::AlignCenter);
-    iconLabel->setCursor(Qt::PointingHandCursor);
-    iconLabel->installEventFilter(this);
-
-    textLabel = new QLabel(this);
-    textLabel->setWordWrap(true);
-    textLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    textLabel->setFont(platform::resolveFont(cfg.ventana.fuenteFamilia, cfg.ventana.fuenteTam));
-
-    auto* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(cfg.ventana.iconoMargen, cfg.ventana.margenY,
-                               cfg.ventana.textoMargen, cfg.ventana.margenY);
-    layout->setSpacing(cfg.ventana.textoGap);
-    layout->addWidget(iconLabel);
-    layout->addWidget(textLabel, 1);
-
-    loadImage(images::pick(cfg));
 }
 
 void LyricWindow::start() {
@@ -112,7 +102,7 @@ void LyricWindow::onPoll() {
             linesReady = false;
             lyricsFound = false;
             lines.clear();
-            loadImage(images::pick(cfg));   // una imagen al azar por canción
+            setImage(images::pick(cfg));   // una imagen al azar por canción
 
             const QString capturedKey = key;
             lyrics::fetch(name, artist, album, durationMs,
@@ -150,51 +140,104 @@ void LyricWindow::onTick() {
 
 void LyricWindow::render(bool visible, const QString& title, const QString& line) {
     if (monotonicMs() < freeUntilMs) return;   // la está arrastrando: no tocar
-    if (!visible && !shown) return;
-    if (visible && shown && title == shownTitle && line == shownLine) return;
-
-    shown = visible;
     if (!visible) {
-        hide();
-        if (movie) movie->stop();
+        if (!shown) return;
+        shown = false;
+        destroy();
         return;
     }
+    if (shown && title == shownTitle && line == shownLine) return;
+
+    shown = true;
     shownTitle = title;
     shownLine = line;
-    setWindowTitle(title);
-    textLabel->setText(line);
+    rebuild(title, line);                      // ventana nueva: cierra la anterior
 
-    move(haveUserPos ? userPos : centered());
-    placed = pos();
+    QWidget* window = popup->widget;
+    // `move()` posiciona el área de cliente; el WM dibuja la barra de título por
+    // encima. Por eso guardamos/restauramos la posición de cliente, no la del
+    // marco (si no, en cada recreación la ventana sube lo que mide la barra).
+    const QPoint target = haveUserPos ? userPos : centered(window);
+    window->move(target);
+    window->show();
+    window->raise();
     createdMs = monotonicMs();
-    show();
-    raise();
-    if (movie) {
-        movie->stop();
-        movie->start();
+    window->move(target);
+    placed = window->frameGeometry().topLeft();
+    if (popup->movie) {
+        popup->movie->stop();
+        popup->movie->start();
     }
 }
 
-QPoint LyricWindow::centered() const {
-    const QRect screen = this->screen()->availableGeometry();
-    return QPoint(screen.x() + (screen.width() - width()) / 2,
-                  screen.y() + (screen.height() - height()) / 2);
+QPoint LyricWindow::centered(QWidget* window) const {
+    const QRect screen = window->screen()->availableGeometry();
+    return QPoint(screen.x() + (screen.width() - window->width()) / 2,
+                  screen.y() + (screen.height() - window->height()) / 2);
 }
 
-void LyricWindow::loadImage(const QString& path) {
-    delete movie;
-    movie = nullptr;
+void LyricWindow::rebuild(const QString& title, const QString& line) {
+    destroy();
+
+    Popup* p = new Popup;
+    p->widget = new QWidget;
+    Qt::WindowFlags flags = Qt::Tool | Qt::WindowDoesNotAcceptFocus
+        | Qt::CustomizeWindowHint | Qt::WindowTitleHint | Qt::WindowCloseButtonHint;
+    if (cfg.ventana.siempreArriba) flags |= Qt::WindowStaysOnTopHint;
+    p->widget->setWindowFlags(flags);
+    p->widget->setAttribute(Qt::WA_ShowWithoutActivating);
+    p->widget->setStyleSheet(QString("QWidget{background:%1;} QLabel{background:transparent;color:%2;}")
+                                 .arg(palette.fondo, palette.texto));
+    p->widget->setWindowTitle(title);
+    p->widget->setWindowIcon(blankIcon());
+
+    p->icon = new QLabel(p->widget);
+    p->icon->setFixedSize(cfg.ventana.iconoPx, cfg.ventana.iconoPx);
+    p->icon->setAlignment(Qt::AlignCenter);
+    p->icon->setCursor(Qt::PointingHandCursor);
+    p->icon->installEventFilter(this);
+
+    p->text = new QLabel(p->widget);
+    p->text->setWordWrap(true);
+    p->text->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    p->text->setFont(platform::resolveFont(cfg.ventana.fuenteFamilia, cfg.ventana.fuenteTam));
+    p->text->setText(line);
+
+    auto* layout = new QHBoxLayout(p->widget);
+    layout->setContentsMargins(cfg.ventana.iconoMargen, cfg.ventana.margenY,
+                               cfg.ventana.textoMargen, cfg.ventana.margenY);
+    layout->setSpacing(cfg.ventana.textoGap);
+    layout->addWidget(p->icon);
+    layout->addWidget(p->text, 1);
+
+    p->widget->setFixedSize(cfg.ventana.ancho, cfg.ventana.alto);
+    platform::makeStealth(p->widget);   // sin entrada en la barra de tareas
+    popup = p;
+
+    setImage(currentImage);   // (re)carga la imagen actual en la ventana nueva
+}
+
+void LyricWindow::destroy() {
+    if (!popup) return;
+    delete popup->widget;
+    delete popup;
+    popup = nullptr;
+}
+
+void LyricWindow::setImage(const QString& path) {
     currentImage = path;
+    if (!popup) return;
+    delete popup->movie;
+    popup->movie = nullptr;
     if (path.isEmpty()) {
-        iconLabel->setMovie(nullptr);
-        iconLabel->clear();
+        popup->icon->setMovie(nullptr);
+        popup->icon->clear();
         return;
     }
-    movie = new QMovie(path, QByteArray(), this);
+    auto* movie = new QMovie(path, QByteArray(), popup->widget);
     if (!movie->isValid()) {
         std::cout << "· no pude abrir " << path.toStdString() << "\n";
         delete movie;
-        movie = nullptr;
         return;
     }
     QSize frame = QImageReader(path).size();
@@ -206,12 +249,13 @@ void LyricWindow::loadImage(const QString& path) {
         movie->setScaledSize(QSize(qMax(1, qRound(frame.width() * scale)),
                                    qMax(1, qRound(frame.height() * scale))));
     }
-    iconLabel->setMovie(movie);
-    if (shown) movie->start();
+    popup->movie = movie;
+    popup->icon->setMovie(movie);
+    if (popup->widget->isVisible()) movie->start();
 }
 
 void LyricWindow::reroll() {
-    loadImage(images::pick(cfg, currentImage));
+    setImage(images::pick(cfg, currentImage));
 }
 
 void LyricWindow::nextProfile() {
@@ -226,7 +270,27 @@ void LyricWindow::nextProfile() {
 }
 
 bool LyricWindow::eventFilter(QObject* watched, QEvent* event) {
-    if (watched == iconLabel && event->type() == QEvent::MouseButtonPress) {
+    if (!popup) return QObject::eventFilter(watched, event);
+
+    if (event->type() == QEvent::Close) {
+        qApp->quit();
+        return false;
+    }
+    if (watched == popup->widget && event->type() == QEvent::Move) {
+        const qint64 now = monotonicMs();
+        if (now - createdMs < PLACE_GRACE_MS) return false;
+        const QPoint frame = popup->widget->frameGeometry().topLeft();
+        if (qAbs(frame.x() - placed.x()) <= MOVE_TOLERANCE_PX
+            && qAbs(frame.y() - placed.y()) <= MOVE_TOLERANCE_PX) {
+            return false;
+        }
+        placed = frame;
+        userPos = popup->widget->geometry().topLeft();   // posición de cliente
+        haveUserPos = true;
+        freeUntilMs = now + DRAG_HOLD_MS;
+        return false;
+    }
+    if (watched == popup->icon && event->type() == QEvent::MouseButtonPress) {
         const auto* press = static_cast<QMouseEvent*>(event);
         if (press->button() == Qt::LeftButton) {
             reroll();
@@ -237,22 +301,7 @@ bool LyricWindow::eventFilter(QObject* watched, QEvent* event) {
             return true;
         }
     }
-    return QWidget::eventFilter(watched, event);
-}
-
-void LyricWindow::moveEvent(QMoveEvent* event) {
-    QWidget::moveEvent(event);
-    const qint64 now = monotonicMs();
-    if (now - createdMs < PLACE_GRACE_MS) return;
-    const QPoint moved = event->pos();
-    if (qAbs(moved.x() - placed.x()) <= MOVE_TOLERANCE_PX
-        && qAbs(moved.y() - placed.y()) <= MOVE_TOLERANCE_PX) {
-        return;
-    }
-    placed = moved;
-    userPos = moved;
-    haveUserPos = true;
-    freeUntilMs = now + DRAG_HOLD_MS;
+    return QObject::eventFilter(watched, event);
 }
 
 void LyricWindow::throttleError(const QString& message) {

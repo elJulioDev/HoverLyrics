@@ -22,4 +22,8 @@ bool isDark();
 // Que el gestor de ventanas no le dé el foco al abrirla.
 void noFocus(QWidget* widget);
 
+// Que la ventana no aparezca en la barra de tareas ni en el paginador (X11).
+// En Wayland/Windows/macOS no hace nada.
+void makeStealth(QWidget* widget);
+
 }

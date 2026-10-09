@@ -98,6 +98,26 @@ int main(int argc, char** argv) {
         return selftest();
     }
 
+#if defined(Q_OS_LINUX)
+    // La versión Python (Tk) corre sobre X11/XWayland, y con eso el "siempre
+    // arriba", la posición y el tamaño se comportan igual. Wayland le da la
+    // espalda al topmost y a mover la ventana, así que si hay XWayland usamos
+    // xcb (se puede forzar otro backend con QT_QPA_PLATFORM).
+    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")
+        && !qEnvironmentVariableIsEmpty("DISPLAY")) {
+        qputenv("QT_QPA_PLATFORM", "xcb");
+    }
+#endif
+
+    // Los tamaños de config.json son píxeles reales, como en la versión Python.
+    // Qt por defecto los escala según el DPI del monitor (acá Xft.dpi=144 daba
+    // 1.5x y la ventana salía más grande); desactivamos esa escala para que
+    // 1 px de config sea 1 px real. La fuente sigue usando el DPI del monitor.
+    // Para volver a la escala de Qt: QT_ENABLE_HIGHDPI_SCALING=1.
+    if (qEnvironmentVariableIsEmpty("QT_ENABLE_HIGHDPI_SCALING")) {
+        qputenv("QT_ENABLE_HIGHDPI_SCALING", "0");
+    }
+
     QApplication app(argc, argv);
     config::Config cfg = config::load();
     const config::Palette palette = config::colors(cfg);
