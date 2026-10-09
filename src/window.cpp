@@ -211,6 +211,7 @@ void LyricWindow::rebuild(const QString& title, const QString& line) {
     layout->addWidget(p->text, 1);
 
     p->widget->setFixedSize(cfg.ventana.ancho, cfg.ventana.alto);
+    p->widget->installEventFilter(this);
     platform::makeStealth(p->widget);   // sin entrada en la barra de tareas
     popup = p;
 
